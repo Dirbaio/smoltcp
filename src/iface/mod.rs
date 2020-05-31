@@ -10,6 +10,7 @@ mod route;
 #[cfg(feature = "ethernet")]
 mod ethernet;
 mod ip;
+mod tun;
 
 #[cfg(feature = "ethernet")]
 pub use self::neighbor::Neighbor as Neighbor;
@@ -21,3 +22,5 @@ pub use self::route::{Route, Routes};
 #[cfg(feature = "ethernet")]
 pub use self::ethernet::{Interface as EthernetInterface,
                          InterfaceBuilder as EthernetInterfaceBuilder};
+pub use self::tun::{Interface as TunInterface,
+                    InterfaceBuilder as TunInterfaceBuilder};

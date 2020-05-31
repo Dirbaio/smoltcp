@@ -6,7 +6,7 @@ use managed::ManagedMap;
 use core::marker::PhantomData;
 
 use {Error, Result};
-use phy::{DeviceCapabilities};
+use phy::{DeviceCapabilities, TxToken};
 #[cfg(feature = "proto-igmp")]
 use time::Duration;
 use time::Instant;
@@ -137,6 +137,29 @@ pub(crate) enum Packet<'a> {
     Udp((IpRepr, UdpRepr<'a>)),
     #[cfg(feature = "socket-tcp")]
     Tcp((IpRepr, TcpRepr<'a>))
+}
+
+use core::fmt;
+use wire::pretty_print::{PrettyPrint, PrettyIndent};
+
+impl PrettyPrint for Packet<'_> {
+    fn pretty_print(buffer: &dyn AsRef<[u8]>, f: &mut fmt::Formatter,
+                    indent: &mut PrettyIndent) -> fmt::Result {
+        match ::wire::ip::Version::of_packet(buffer.as_ref()).unwrap() {
+            #[cfg(feature = "proto-ipv4")]
+            ::wire::ip::Version::Ipv4 => {
+                indent.increase(f)?;
+                Ipv4Packet::<&[u8]>::pretty_print(buffer, f, indent)
+            },
+            #[cfg(feature = "proto-ipv6")]
+            ::wire::ip::Version::Ipv6 => {
+                indent.increase(f)?;
+                Ipv6Packet::<&[u8]>::pretty_print(buffer, f, indent)
+            },
+            // Drop all other traffic.
+            _ => Ok(()),
+        }
+    }
 }
 
 impl<'a> Packet<'a> {
@@ -603,7 +626,6 @@ impl<'b, 'c, 'e, 'x> Processor<'b, 'c, 'e, 'x> {
     {
         let checksum_caps = self.state.device_capabilities.checksum.clone();
         let ipv4_repr = Ipv4Repr::parse(&ipv4_packet, &checksum_caps)?;
-
         if !ipv4_repr.src_addr.is_unicast() {
             // Discard packets with non-unicast source addresses.
             net_debug!("non-unicast source address");
@@ -642,7 +664,7 @@ impl<'b, 'c, 'e, 'x> Processor<'b, 'c, 'e, 'x> {
                 self.process_igmp(timestamp, ipv4_repr, ip_payload),
 
             #[cfg(feature = "socket-udp")]
-            IpProtocol::Udp =>
+            IpProtocol::Udp => 
                 self.process_udp(sockets, ip_repr, handled_by_raw_socket, ip_payload),
 
             #[cfg(feature = "socket-tcp")]
@@ -1013,6 +1035,12 @@ impl<'b, 'c, 'e, 'x> Processor<'b, 'c, 'e, 'x> {
             // The packet wasn't handled by a socket, send a TCP RST packet.
             Ok(Some(Packet::Tcp(TcpSocket::rst_reply(&ip_repr, &tcp_repr))))
         }
+    }
+    pub fn dispatch<Tx>(&mut self, _tx_token: Tx, _timestamp: Instant,
+        _packet: Packet) -> Result<()>
+        where Tx: TxToken
+    {
+        Ok(())
     }
 }
 
