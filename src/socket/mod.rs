@@ -71,6 +71,10 @@ pub enum Socket<'a> {
     Dns(dns::Socket<'a>),
 }
 
+fn assert_covariant<'a, 'b: 'a>(x: Socket<'b>) -> Socket<'a> {
+    x
+}
+
 impl<'a> Socket<'a> {
     pub(crate) fn poll_at(&self, cx: &mut Context) -> PollAt {
         match self {
